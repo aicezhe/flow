@@ -1,0 +1,10 @@
+data/
+.env
+.venv/
+node_modules/
+web/dist/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+.env.*
+!.env.example
