@@ -19,7 +19,7 @@ function AddFriendForm({ onAdded }: { onAdded: () => void }) {
     if (busy) return;
     const name = username.trim();
     if (!USERNAME_RE.test(name)) {
-      setError("Ник Last.fm состоит из букв, цифр, дефиса и подчёркивания, без пробелов.");
+      setError("A Last.fm username has letters, digits, hyphen and underscore, no spaces.");
       return;
     }
     setBusy(true);
@@ -40,13 +40,13 @@ function AddFriendForm({ onAdded }: { onAdded: () => void }) {
 
   return (
     <form className="panel" onSubmit={submit}>
-      <h3>Добавить друга</h3>
+      <h3>Add a friend</h3>
       <p className="privacy">
-        Берём артистов, названия треков и время прослушивания. Данные можно удалить в любой момент.
+        We collect artists, track titles and listening times. The data can be deleted at any time.
       </p>
-      <label htmlFor="uname">Ник на Last.fm</label>
+      <label htmlFor="uname">Last.fm username</label>
       <input id="uname" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" />
-      <label htmlFor="dname">Как показывать (необязательно)</label>
+      <label htmlFor="dname">Display name (optional)</label>
       <input id="dname" value={displayName} maxLength={60} onChange={(e) => setDisplayName(e.target.value)} autoComplete="off" />
       {error && (
         <p className="form-error" role="alert">
@@ -55,12 +55,12 @@ function AddFriendForm({ onAdded }: { onAdded: () => void }) {
       )}
       {added && (
         <p className="form-ok" role="status">
-          Добавили {added}. Теперь нажмите «Синхронизировать», чтобы загрузить прослушивания.
+          Added {added}. Now press Sync to load their plays.
         </p>
       )}
       <div className="row">
         <button type="submit" className="btn primary" disabled={busy || !username.trim()}>
-          {busy ? "Проверяем ник…" : "Добавить"}
+          {busy ? "Checking username…" : "Add"}
         </button>
       </div>
     </form>
@@ -99,10 +99,10 @@ function PersonRow(props: {
           {p.display_name !== p.username && <span className="mono"> {p.username}</span>}
         </div>
         <div className="meta">
-          {plural(p.plays, PLAYS)} · {p.last_synced_at ? `обновлено ${fmtDateTime(p.last_synced_at)}` : "ещё не загружали"}
+          {plural(p.plays, PLAYS)} · {p.last_synced_at ? `updated ${fmtDateTime(p.last_synced_at)}` : "not loaded yet"}
         </div>
         {waiting ? (
-          <span className="badge wait">ждём данные</span>
+          <span className="badge wait">waiting for data</span>
         ) : (
           <span className={`badge ${p.status}`}>{STATUS_LABEL[p.status]}</span>
         )}
@@ -110,16 +110,16 @@ function PersonRow(props: {
       </div>
 
       {confirming ? (
-        <div className="confirm" role="alertdialog" aria-label="Подтверждение удаления">
+        <div className="confirm" role="alertdialog" aria-label="Confirm deletion">
           <p>
-            Удалить {p.display_name} и все прослушивания? Это нельзя отменить.
+            Delete {p.display_name} and all their plays? This cannot be undone.
           </p>
           <div className="row">
             <button type="button" className="btn danger" onClick={remove} disabled={deleting}>
-              {deleting ? "Удаляем…" : "Да, удалить"}
+              {deleting ? "Deleting…" : "Yes, delete"}
             </button>
             <button type="button" className="btn" onClick={() => setConfirming(false)} disabled={deleting}>
-              Отмена
+              Cancel
             </button>
           </div>
           {error && (
@@ -131,10 +131,10 @@ function PersonRow(props: {
       ) : (
         <div className="row">
           <button type="button" className="btn small" onClick={onSync} disabled={locked}>
-            Обновить
+            Update
           </button>
           <button type="button" className="btn small" onClick={() => setConfirming(true)} disabled={locked}>
-            Удалить
+            Delete
           </button>
         </div>
       )}
@@ -144,10 +144,10 @@ function PersonRow(props: {
 
 function SyncResults({ results }: { results: SyncResult[] }) {
   return (
-    <ul className="results" aria-label="Результат синхронизации">
+    <ul className="results" aria-label="Sync result">
       {results.map((r) => (
         <li key={r.username} className={r.status === "ok" ? "ok" : "bad"}>
-          <strong>{r.username}</strong>: {r.status === "ok" ? `добавлено ${r.added}` : STATUS_LABEL[r.status]}
+          <strong>{r.username}</strong>: {r.status === "ok" ? `added ${r.added}` : STATUS_LABEL[r.status]}
           {r.error && <span className="person-error"> {r.error}</span>}
         </li>
       ))}
@@ -186,17 +186,17 @@ export function People({ state, onChanged }: { state: LoadState<Person[]>; onCha
         state={state}
         isEmpty={(people) => people.length === 0}
         empty={
-          <Empty title="Пока никого нет">Добавьте друга по нику Last.fm в форме выше.</Empty>
+          <Empty title="Nobody here yet">Add a friend by their Last.fm username using the form above.</Empty>
         }
       >
         {(people) => (
           <section>
             <div className="sync-bar">
               <button type="button" className="btn primary" onClick={() => runSync()} disabled={syncing !== null}>
-                {syncing === "all" ? "Загружаем…" : "Синхронизировать всех"}
+                {syncing === "all" ? "Loading…" : "Sync everyone"}
               </button>
             </div>
-            {syncing && <Loading text="Загружаем прослушивания с Last.fm. Это может занять до минуты, не закрывайте страницу." />}
+            {syncing && <Loading text="Loading plays from Last.fm. This can take up to a minute, please keep the page open." />}
             {syncError && (
               <p className="form-error" role="alert">
                 {syncError}

@@ -11,16 +11,16 @@ function Row({ s, locked, onAct }: { s: SignupRequest; locked: boolean; onAct: (
       <div className="person-main">
         <strong>{s.username}</strong>
         <div className="meta">
-          заявка {fmtDateTime(s.created_at)} · согласие {fmtDateTime(s.consent_at)}
-          {s.contact ? ` · контакт: ${s.contact}` : ""}
+          requested {fmtDateTime(s.created_at)} · consent {fmtDateTime(s.consent_at)}
+          {s.contact ? ` · contact: ${s.contact}` : ""}
         </div>
       </div>
       <div className="row">
         <button type="button" className="btn small primary" disabled={locked} onClick={() => onAct(s.id, true)}>
-          Принять
+          Approve
         </button>
         <button type="button" className="btn small" disabled={locked} onClick={() => onAct(s.id, false)}>
-          Отклонить
+          Reject
         </button>
       </div>
     </li>
@@ -50,7 +50,7 @@ export function Signups({ state, onChanged }: { state: LoadState<SignupRequest[]
     <Async
       state={state}
       isEmpty={(l) => l.length === 0}
-      empty={<Empty title="Новых заявок нет">Когда друг отправит заявку со страницы «Я друг», она появится здесь.</Empty>}
+      empty={<Empty title="No new requests">When a friend submits the form on the guest page, it will appear here.</Empty>}
     >
       {(list) => (
         <section>
@@ -59,7 +59,7 @@ export function Signups({ state, onChanged }: { state: LoadState<SignupRequest[]
               {error}
             </p>
           )}
-          <p className="meta">После принятия человек появится на вкладке «Люди». Прослушивания загрузите кнопкой «Синхронизировать».</p>
+          <p className="meta">Once approved, the person appears on the People tab. Load their plays with Sync.</p>
           <ul className="people">
             {list.map((s) => (
               <Row key={s.id} s={s} locked={busy} onAct={act} />

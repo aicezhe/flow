@@ -2,30 +2,27 @@ import type { CSSProperties } from "react";
 import type { PersonStatus } from "./types";
 
 export function fmtDate(ts: number | null): string {
-  return ts === null ? "-" : new Date(ts * 1000).toLocaleDateString("ru-RU");
+  return ts === null ? "-" : new Date(ts * 1000).toLocaleDateString("en-GB");
 }
 
 export function fmtDateTime(ts: number | null): string {
   return ts === null
     ? "-"
-    : new Date(ts * 1000).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" });
+    : new Date(ts * 1000).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" });
 }
 
-// 1 прослушивание, 2 прослушивания, 5 прослушиваний
-export function plural(n: number, forms: [string, string, string]): string {
-  const m10 = n % 10;
-  const m100 = n % 100;
-  const form = m10 === 1 && m100 !== 11 ? forms[0] : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? forms[1] : forms[2];
-  return `${n} ${form}`;
+// 1 play, 2 plays
+export function plural(n: number, forms: [string, string]): string {
+  return `${n} ${n === 1 ? forms[0] : forms[1]}`;
 }
 
-export const PLAYS: [string, string, string] = ["прослушивание", "прослушивания", "прослушиваний"];
+export const PLAYS: [string, string] = ["play", "plays"];
 
 export const STATUS_LABEL: Record<PersonStatus, string> = {
-  ok: "Готово",
-  private: "Профиль закрыт",
-  not_found: "Ник не найден",
-  error: "Ошибка",
+  ok: "Ready",
+  private: "Profile is private",
+  not_found: "Username not found",
+  error: "Error",
 };
 
 // Цвет ячейки тепловой таблицы: логарифмическая шкала, чтобы один любимый артист

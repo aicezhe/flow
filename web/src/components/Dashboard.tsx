@@ -8,10 +8,10 @@ import { Signups } from "./Signups";
 
 type Tab = "overview" | "people" | "signups" | "report";
 const TABS: [Tab, string][] = [
-  ["overview", "Обзор"],
-  ["people", "Люди"],
-  ["signups", "Заявки"],
-  ["report", "Отчёт"],
+  ["overview", "Overview"],
+  ["people", "People"],
+  ["signups", "Requests"],
+  ["report", "Report"],
 ];
 
 export function Dashboard({ onLogout }: { onLogout: () => void }) {
@@ -31,7 +31,7 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
     <main className="page">
       <header className="top">
         <span className="logo">Flow</span>
-        <nav aria-label="Разделы">
+        <nav aria-label="Sections">
           {TABS.map(([id, label]) => (
             <button
               key={id}
@@ -46,7 +46,7 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
           ))}
         </nav>
         <button type="button" className="btn small" onClick={onLogout}>
-          Выйти
+          Sign out
         </button>
       </header>
 
@@ -55,7 +55,7 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
       {tab === "signups" && <Signups state={signups} onChanged={refresh} />}
       {tab === "report" && <Report state={report} />}
 
-      <p className="note">Здесь личные данные о прослушиваниях. Храните их на своём компьютере и не отправляйте в git.</p>
+      <p className="note">This page contains personal listening data. Keep it on your computer and do not commit it to git.</p>
     </main>
   );
 }

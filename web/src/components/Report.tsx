@@ -25,7 +25,7 @@ function BarList({ items }: { items: UserStats["top_artists"] }) {
 function HoursChart({ hours }: { hours: number[] }) {
   const max = Math.max(0, ...hours);
   return (
-    <div role="img" aria-label="Прослушивания по часам суток">
+    <div role="img" aria-label="Plays by hour of day">
       <div className="hours">
         {hours.map((n, h) => (
           <div key={h} className="hc" title={`${String(h).padStart(2, "0")}:00, ${plural(n, PLAYS)}`}>
@@ -49,15 +49,15 @@ function UserCard({ u }: { u: UserStats }) {
     <section className="user">
       <h3>{u.name}</h3>
       <p className="meta">
-        {plural(u.plays, PLAYS)} · {u.artists} артистов · {u.heard_once} слушал по одному разу · {fmtDate(u.first_ts)} – {fmtDate(u.last_ts)}
+        {plural(u.plays, PLAYS)} · {u.artists} artists · {u.heard_once} heard once · {fmtDate(u.first_ts)} – {fmtDate(u.last_ts)}
       </p>
       <div className="two">
         <div>
-          <h4>Топ артистов</h4>
+          <h4>Top artists</h4>
           <BarList items={u.top_artists} />
         </div>
         <div>
-          <h4>Прослушивания по часам</h4>
+          <h4>Plays by hour of day</h4>
           <HoursChart hours={u.hours} />
         </div>
       </div>
@@ -67,7 +67,7 @@ function UserCard({ u }: { u: UserStats }) {
 
 function SimilarityTable({ sim }: { sim: Similarity }) {
   if (sim.users.length < 2) {
-    return <p className="meta">Добавьте второго человека, чтобы увидеть, насколько совпадают вкусы.</p>;
+    return <p className="meta">Add a second person to see how tastes overlap.</p>;
   }
   return (
     <>
@@ -100,7 +100,7 @@ function SimilarityTable({ sim }: { sim: Similarity }) {
           </tbody>
         </table>
       </div>
-      <p className="meta">Доля артистов, которых слушают оба человека (сходство Жаккара).</p>
+      <p className="meta">Share of artists both people listen to (Jaccard similarity).</p>
     </>
   );
 }
@@ -146,21 +146,21 @@ export function Report({ state }: { state: LoadState<ReportData> }) {
       state={state}
       isEmpty={(r) => r.users.length === 0}
       empty={
-        <Empty title="Отчёт пока пуст">
-          Нет ни одного прослушивания. Добавьте друга на вкладке «Люди» и нажмите «Синхронизировать».
+        <Empty title="The report is empty">
+          There are no plays yet. Add a friend on the People tab and press Sync.
         </Empty>
       }
     >
       {(r) => (
         <>
-          <h2>Люди</h2>
+          <h2>People</h2>
           {r.users.map((u) => (
             <UserCard key={u.name} u={u} />
           ))}
-          <h2>Насколько похожи вкусы</h2>
+          <h2>How similar are the tastes</h2>
           <SimilarityTable sim={r.similarity} />
-          <h2>Матрица: люди и топ-{r.matrix.artists.length} артистов</h2>
-          <p className="meta">В ячейке число прослушиваний, пустая ячейка значит «ни разу». Время суток указано по часовому поясу сервера.</p>
+          <h2>Matrix: people × top {r.matrix.artists.length} artists</h2>
+          <p className="meta">Each cell is the number of plays; an empty cell means none. Hours use the server's time zone.</p>
           <ArtistMatrixTable m={r.matrix} />
         </>
       )}

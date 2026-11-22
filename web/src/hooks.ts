@@ -8,7 +8,7 @@ export interface LoadState<T> {
 }
 
 export function errText(e: unknown): string {
-  return e instanceof Error ? e.message : "Неизвестная ошибка";
+  return e instanceof Error ? e.message : "Unknown error";
 }
 
 // Загружает данные при появлении компонента; reload() обновляет их.

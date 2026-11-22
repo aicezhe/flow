@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { LoadState } from "../hooks";
 
-export function Loading({ text = "Загружаем…" }: { text?: string }) {
+export function Loading({ text = "Loading…" }: { text?: string }) {
   return (
     <p className="state" role="status">
       <span className="spinner" aria-hidden="true" /> {text}
@@ -24,7 +24,7 @@ export function ErrorBox({ message, onRetry }: { message: string; onRetry?: () =
       <p>{message}</p>
       {onRetry && (
         <button type="button" className="btn small" onClick={onRetry}>
-          Повторить
+          Retry
         </button>
       )}
     </div>

@@ -80,6 +80,7 @@ export interface SignupIn {
   consent: boolean;
   contact: string;
   website: string; // honeypot, всегда пустой у человека
+  invite_code?: string; // из ссылки /guestform?invite=...; сервер пока его не проверяет
 }
 
 export interface SignupRequest {

@@ -9,18 +9,18 @@ export function Overview({ state }: { state: LoadState<Report> }) {
       state={state}
       isEmpty={(r) => r.summary.plays === 0}
       empty={
-        <Empty title="Пока нет данных">
-          Добавьте друга на вкладке «Люди» и нажмите «Синхронизировать».
+        <Empty title="No data yet">
+          Add a friend on the People tab and press Sync.
         </Empty>
       }
     >
       {(r) => {
         const s = r.summary;
         const cards: [string, string][] = [
-          ["Люди", String(s.people)],
-          ["Прослушивания", String(s.plays)],
-          ["Артисты", String(s.artists)],
-          ["Плотность матрицы", `${s.density_percent.toFixed(1)}%`],
+          ["People", String(s.people)],
+          ["Plays", String(s.plays)],
+          ["Artists", String(s.artists)],
+          ["Matrix density", `${s.density_percent.toFixed(1)}%`],
         ];
         return (
           <section>
@@ -33,10 +33,10 @@ export function Overview({ state }: { state: LoadState<Report> }) {
               ))}
             </div>
             <p className="meta">
-              Прослушивания с {fmtDate(s.first_ts)} по {fmtDate(s.last_ts)} · отчёт собран {fmtDateTime(r.generated_at)}
+              Plays from {fmtDate(s.first_ts)} to {fmtDate(s.last_ts)} · report generated {fmtDateTime(r.generated_at)}
             </p>
             <p className="meta">
-              Плотность показывает, какая доля пар «человек и артист» не пуста. Чем она выше, тем больше у друзей общей музыки.
+              Density is the share of person–artist pairs that are not empty. The higher it is, the more music friends have in common.
             </p>
           </section>
         );

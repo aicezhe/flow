@@ -109,20 +109,228 @@ table.mx th { font: 400 11px var(--mono); color: var(--muted); background: var(-
 table.mx th.l { text-align: left; white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
 .user h3 { overflow-wrap: anywhere; }
 
-/* страница друга */
-.friend .btn.small { margin-bottom: 16px; }
-.steps { display: grid; gap: 16px; margin: 28px 0; }
-.steps li { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 16px; background: var(--card); border: 1px solid var(--line); padding: 20px; align-items: start; }
-.num { font: 300 48px / 1 var(--serif); color: var(--blue2); }
-.steps h2 { font: 400 26px var(--serif); margin: 0 0 6px; border: 0; padding: 0; }
-.steps p { font-size: 18px; }
-.info-grid { display: grid; gap: 0; }
-.info-grid p { font-size: 17px; }
-
 @media (max-width: 700px) { .two { grid-template-columns: 1fr; } }
-@media (max-width: 480px) { .steps li { grid-template-columns: 40px minmax(0, 1fr); gap: 12px; padding: 16px; } .num { font-size: 38px; } }
 
 /* форма заявки */
 .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 label.check { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; align-items: start; text-transform: none; letter-spacing: 0; font: 300 16px/1.5 var(--sans); color: var(--text); margin-top: 16px; }
 label.check input { width: 22px; min-height: 22px; height: 22px; margin: 2px 0 0; }
+
+/* ===== Главная: выбор «I am Anna / I am a guest» ===== */
+.landing {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh; /* на телефоне не прыгает вместе с адресной строкой */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  text-align: center;
+}
+.landing-inner {
+  position: relative;
+  z-index: 1; /* над фоном-потоком */
+  width: clamp(240px, 72vw, 360px);
+}
+.landing-mark {
+  font: 400 12px var(--mono);
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 28px;
+  padding-left: 0.4em; /* выравнивает визуальный центр: интервал добавляется и после последней буквы */
+}
+.landing .notice { text-align: left; margin: 0 0 20px; }
+.landing .choice { display: grid; gap: 14px; margin: 0; }
+.pin-form { margin-top: 0; text-align: left; }
+
+/* Кнопка: заливка «перетекает» слева направо, лёгкий подъём, тень, межбуквенный интервал */
+.flow-btn {
+  position: relative;
+  isolation: isolate; /* заливка ::before остаётся внутри кнопки, под текстом */
+  overflow: hidden;
+  width: 100%;
+  min-height: 56px;
+  padding: 16px 20px;
+  border: 1px solid var(--blue);
+  background: var(--bg); /* сплошной фон: линии фона не мешают читать */
+  color: var(--blue);
+  font: 400 22px var(--serif);
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: transform 250ms ease, box-shadow 250ms ease, letter-spacing 250ms ease, color 250ms ease;
+}
+.flow-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--blue);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 280ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.flow-btn.primary { background: var(--blue); color: #fff; }
+.flow-btn.primary::before { background: var(--blue2); }
+
+/* фокус с клавиатуры работает всегда, hover только там, где есть мышь */
+.flow-btn:focus-visible {
+  outline: 2px solid var(--blue2);
+  outline-offset: 3px;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(26, 58, 107, 0.18);
+  letter-spacing: 0.04em;
+}
+.flow-btn:focus-visible::before { transform: scaleX(1); }
+.flow-btn:not(.primary):focus-visible { color: #fff; }
+@media (hover: hover) {
+  .flow-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(26, 58, 107, 0.18);
+    letter-spacing: 0.04em;
+  }
+  .flow-btn:hover::before { transform: scaleX(1); }
+  .flow-btn:not(.primary):hover { color: #fff; }
+}
+.flow-btn:active {
+  transform: translateY(0) scale(0.985);
+  box-shadow: 0 2px 6px rgba(26, 58, 107, 0.2);
+  transition-duration: 90ms;
+}
+.flow-btn:active::before { transform: scaleX(1); }
+.flow-btn:not(.primary):active { color: #fff; }
+
+/* ===== Фон «поток» ===== */
+.flow-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden; /* не даёт появиться горизонтальному скроллу */
+  pointer-events: none; /* клики и касания проходят сквозь */
+}
+.flow-line {
+  position: absolute;
+  left: 0;
+  width: 200%; /* две плитки подряд: сдвиг на 50% замыкается без шва */
+  will-change: transform;
+  animation: flow-drift linear infinite;
+}
+@keyframes flow-drift {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+.flow-bg.is-paused .flow-line { animation-play-state: paused; } /* вкладка скрыта */
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-line { animation: none; } /* линии остаются на месте */
+  .flow-btn, .flow-btn::before { transition: none; }
+  .flow-btn:hover, .flow-btn:focus-visible, .flow-btn:active { transform: none; letter-spacing: 0.01em; }
+}
+
+/* ===== Страница друга: чеклист-таймлайн и форма на одном экране ===== */
+.fr { min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 12px 16px; }
+.fr-wrap { width: min(100%, 520px); display: grid; gap: 10px; }
+.fr-head { display: grid; gap: 2px; }
+.fr-top { display: flex; align-items: center; justify-content: space-between; }
+.fr-head h1 { font: 300 clamp(26px, 7vw, 34px) / 1.1 var(--serif); margin: 6px 0 0; }
+.fr-sub { font-size: 14px; color: var(--muted); }
+.fr-side { display: grid; gap: 8px; align-content: start; }
+
+/* таймлайн */
+.fr-steps { margin: 2px 0 0; }
+.fr-step { position: relative; }
+.fr-row { display: flex; align-items: center; min-height: 44px; }
+.fr-check {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; min-height: 44px;
+  padding: 0; border: 0; background: none; text-align: left; cursor: pointer; color: var(--text);
+}
+.fr-dot {
+  position: relative; z-index: 1; flex: none; width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; color: #fff;
+  background: var(--card); border: 2px solid rgba(26, 58, 107, 0.35);
+  transition: background 250ms ease, border-color 250ms ease;
+}
+.fr-dot svg { opacity: 0; transform: scale(0.5); transition: opacity 200ms ease, transform 250ms ease; }
+.fr-title { font: 400 19px / 1.2 var(--serif); color: var(--text); transition: color 250ms ease; }
+.fr-step.done .fr-dot { background: var(--blue2); border-color: var(--blue2); animation: fr-pop 320ms ease; }
+.fr-step.done .fr-dot svg { opacity: 1; transform: none; }
+.fr-step.done .fr-title { color: var(--blue); }
+@keyframes fr-pop { 0% { transform: scale(0.7); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
+
+/* линия от кружка вниз до следующего; закрашивается, когда следующий шаг отмечен */
+.fr-step:not(:last-child)::before,
+.fr-step:not(:last-child)::after { content: ""; position: absolute; left: 10px; top: 33px; bottom: -11px; width: 2px; border-radius: 1px; }
+.fr-step:not(:last-child)::before { background: rgba(26, 58, 107, 0.16); }
+.fr-step:not(:last-child)::after { background: var(--blue2); transform: scaleY(0); transform-origin: top; transition: transform 380ms ease; }
+.fr-step.next-done:not(:last-child)::after { transform: scaleY(1); }
+
+.fr-more { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: none; color: var(--muted); cursor: pointer; }
+.fr-more svg { transition: transform 220ms ease; }
+.fr-step.open .fr-more svg { transform: rotate(180deg); }
+.fr-check:focus-visible, .fr-more:focus-visible, .fr-info summary:focus-visible { outline: 2px solid var(--blue2); outline-offset: 2px; }
+@media (hover: hover) { .fr-check:hover .fr-title { color: var(--blue2); } .fr-more:hover { color: var(--blue); } }
+
+/* описание шага: раскрывается плавно, остальные свёрнуты */
+.fr-desc { display: grid; grid-template-rows: 0fr; opacity: 0; padding-left: 34px; transition: grid-template-rows 220ms ease, opacity 220ms ease; }
+.fr-step.open .fr-desc { grid-template-rows: 1fr; opacity: 1; }
+.fr-desc-in { overflow: hidden; min-height: 0; }
+.fr-desc-in p { font-size: 14px; line-height: 1.45; color: var(--muted); padding: 0 8px 8px 0; }
+
+/* форма в компактном виде */
+.signup.compact { padding: 12px 14px; margin-top: 0; }
+.signup.compact h3 { font-size: 20px; }
+.signup.compact label { margin: 8px 0 3px; font-size: 10px; }
+.signup.compact input:not([type="checkbox"]) { min-height: 40px; padding: 8px 10px; }
+.signup.compact label.check { margin-top: 10px; font-size: 14px; line-height: 1.4; }
+.signup.compact .row { margin-top: 10px; }
+.signup.compact .btn { min-height: 42px; }
+.signup.compact .form-error { margin-top: 8px; font-size: 14px; line-height: 1.35; }
+.signup.compact p { font-size: 14px; margin-top: 4px; }
+.fr-fields { display: grid; grid-template-columns: 1fr; gap: 0 12px; }
+
+/* «Что берётся и как удалить» */
+.fr-info summary { cursor: pointer; font: 400 11px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); min-height: 36px; display: flex; align-items: center; }
+.fr-info dl { margin: 0 0 6px; display: grid; gap: 6px; }
+.fr-info dt { font: 400 10px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.fr-info dd { margin: 0; font-size: 14px; line-height: 1.35; }
+
+/* широкий экран: чеклист слева, форма справа */
+@media (min-width: 880px) {
+  .fr-wrap { width: min(100%, 900px); grid-template-columns: 1fr 1fr; column-gap: 40px; align-items: start; }
+  .fr-head { grid-column: 1 / -1; }
+  .fr-fields { grid-template-columns: 1fr; }
+}
+@media (max-height: 760px) and (max-width: 879px) {
+  .fr-row, .fr-check, .fr-more { min-height: 40px; height: auto; }
+  .fr-step:not(:last-child)::before, .fr-step:not(:last-child)::after { top: 31px; bottom: -9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fr-dot, .fr-dot svg, .fr-title, .fr-desc, .fr-more svg, .fr-step::after { transition: none; }
+  .fr-step.done .fr-dot { animation: none; }
+}
+
+/* невысокие телефоны (например 360x740): ещё плотнее, чтобы всё осталось на одном экране */
+@media (max-height: 780px) and (max-width: 879px) {
+  .fr { padding: 8px 14px; }
+  .fr-wrap { gap: 6px; }
+  .fr-sub { display: none; }
+  .fr-head h1 { font-size: 24px; margin-top: 2px; }
+  .signup.compact { padding: 10px 12px; }
+  .signup.compact label { margin-top: 6px; }
+  .signup.compact label.check { font-size: 13px; line-height: 1.35; margin-top: 8px; }
+  .signup.compact input:not([type="checkbox"]) { min-height: 38px; }
+  .signup.compact .row { margin-top: 8px; }
+  .signup.compact .btn { min-height: 40px; }
+}
+
+/* кнопка-ссылка: «I am a guest» это <a>, а не <button> */
+.flow-btn { display: flex; align-items: center; justify-content: center; text-decoration: none; text-align: center; box-sizing: border-box; }
+.fr-invite { margin-top: 10px; }
+.fr-invite summary { cursor: pointer; font: 400 11px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); min-height: 36px; display: flex; align-items: center; }
+.fr-invite summary:focus-visible { outline: 2px solid var(--blue2); outline-offset: 2px; }
+
+/* невысокие телефоны: раскрывашки плотнее, чтобы страница друга осталась на одном экране */
+@media (max-height: 780px) and (max-width: 879px) {
+  .fr-invite { margin-top: 2px; }
+  .fr-invite summary, .fr-info summary { min-height: 28px; }
+}

@@ -26,13 +26,13 @@ function messageFrom(status: number, body: unknown): string {
     const parts = detail.map((d: unknown) =>
       typeof d === "object" && d !== null && "msg" in d ? String((d as { msg: unknown }).msg) : String(d),
     );
-    return `Проверьте введённые данные: ${parts.join("; ")}`;
+    return `Please check your input: ${parts.join("; ")}`;
   }
   // 502/503/504 без JSON-тела приходят от прокси, когда бэкенд не запущен
   if (status === 502 || status === 503 || status === 504) {
-    return "Нет связи с сервером. Запущен ли бэкенд на 127.0.0.1:8000?";
+    return "Can't reach the server. Is the backend running on 127.0.0.1:8000?";
   }
-  return `Ошибка сервера (${status})`;
+  return `Server error (${status})`;
 }
 
 async function request<T>(
@@ -52,7 +52,7 @@ async function request<T>(
     if (body !== undefined) init.body = JSON.stringify(body);
     res = await fetch(path, init);
   } catch {
-    throw new ApiError(0, "Нет связи с сервером. Запущен ли бэкенд на 127.0.0.1:8000?");
+    throw new ApiError(0, "Can't reach the server. Is the backend running on 127.0.0.1:8000?");
   }
 
   if (res.status === 204) return undefined as T; // DELETE отвечает без тела
