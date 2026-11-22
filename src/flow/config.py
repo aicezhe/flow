@@ -9,7 +9,16 @@ ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env")
 
 
+def database_url() -> str:
+    """Строка подключения к PostgreSQL. Содержит пароль: нигде не печатать и не логировать."""
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        raise RuntimeError("Не задана переменная окружения DATABASE_URL")
+    return url
+
+
 def db_path() -> Path:
+    """Путь к старой SQLite-базе. Нужен только скрипту миграции в Postgres."""
     return Path(os.environ.get("DB_PATH") or ROOT / "data" / "flow.db")
 
 
