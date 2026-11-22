@@ -37,9 +37,9 @@ def _error_from_code(code: int, message: str) -> LastfmError:
     return LastfmError("error", f"Last.fm вернул ошибку {code}: {message}")
 
 
-def _call(method: str, api_key: str, **params) -> dict:
+def _call(method: str, api_key: str, timeout: float = TIMEOUT, **params) -> dict:
     r = requests.get(API_URL, params={"method": method, "api_key": api_key,
-                                      "format": "json", **params}, timeout=TIMEOUT)
+                                      "format": "json", **params}, timeout=timeout)
     try:
         data = r.json()
     except ValueError:
@@ -78,6 +78,16 @@ def verify_user(username: str, api_key: str | None = None) -> str:
     """Проверяет, что ник существует; возвращает его написание из Last.fm."""
     data = _call("user.getInfo", api_key or config.lastfm_key(), user=username)
     return data["user"]["name"]
+
+
+def verify_public_user(username: str, api_key: str | None = None) -> str:
+    """Для публичной заявки: ник существует И недавние прослушивания открыты.
+    user.getInfo приватность не показывает, поэтому дополнительно просим один трек.
+    Возвращает написание ника из Last.fm. Короткий таймаут: этот путь открыт всем."""
+    key = api_key or config.lastfm_key()
+    canonical = _call("user.getInfo", key, timeout=10, user=username)["user"]["name"]
+    _call("user.getRecentTracks", key, timeout=10, user=canonical, limit=1)
+    return canonical
 
 
 def sync_user(conn, username: str, api_key: str | None = None) -> dict:

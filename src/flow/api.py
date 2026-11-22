@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from . import analytics, config, lastfm, storage
-from .auth import Auth
+from .auth import Auth, RateLimiter
 
 # CORS: только адрес dev-сервера Vite.
 ALLOWED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
@@ -56,6 +56,20 @@ class SyncIn(BaseModel):
     username: str | None = None
 
 
+class SignupIn(BaseModel):
+    username: str = Field(pattern=r"^[\w-]{1,64}$")
+    consent: bool = False
+    contact: str = Field(default="", max_length=100)
+    website: str = Field(default="", max_length=200)   # honeypot: человек его не видит
+
+
+SIGNUP_MAX_BODY = 2048        # байт
+SIGNUP_LIMIT = 5              # заявок
+SIGNUP_WINDOW = 600           # за 10 минут с одного адреса
+SIGNUP_MAX_PENDING = 50       # потолок ожидающих заявок
+SIGNUP_OK = {"status": "received"}   # один и тот же ответ на любой «успех»
+
+
 # ---------- открытые адреса ----------
 
 public = APIRouter(prefix="/api")
@@ -78,6 +92,36 @@ def login(body: AuthIn, request: Request):
     if not hmac.compare_digest(body.pin.encode(), pin.encode()):
         raise HTTPException(401, "Неверный PIN.")
     return {"token": auth.issue_token()}
+
+
+@public.post("/signup")
+def signup(body: SignupIn, request: Request, conn=Depends(get_conn)):
+    """Заявка друга. Ничего не сообщает о других людях: новая заявка, повторная и ник,
+    который уже в списке, получают одинаковый ответ."""
+    if not config.signup_enabled():
+        raise HTTPException(404, "Not Found")
+    if int(request.headers.get("content-length") or 0) > SIGNUP_MAX_BODY:
+        raise HTTPException(413, "Слишком большой запрос.")
+    if body.website:                      # бот заполнил скрытое поле: молча «успех»
+        return SIGNUP_OK
+    if body.consent is not True:
+        raise HTTPException(400, "Нужно согласие: отметьте галочку, что вы согласны на использование данных.")
+    client = request.client.host if request.client else "?"
+    if not request.app.state.signup_limiter.allow(client):
+        raise HTTPException(429, "Слишком много заявок. Попробуйте позже.", headers={"Retry-After": "600"})
+    if storage.count_pending_signups(conn) >= SIGNUP_MAX_PENDING:
+        raise HTTPException(503, "Приём заявок временно закрыт. Отправьте ник Анне напрямую.")
+    key = lastfm_key()
+    try:
+        canonical = lastfm.verify_public_user(body.username, key)
+    except lastfm.LastfmError as e:
+        code = {"not_found": 404, "private": 403}.get(e.status, 502)
+        raise HTTPException(code, e.message)
+    except (requests.RequestException, KeyError, ValueError, TypeError):
+        raise HTTPException(502, lastfm.MESSAGES["error"])
+    if not storage.get_person(conn, canonical):
+        storage.create_signup(conn, canonical, body.contact.strip(), int(time.time()))
+    return SIGNUP_OK
 
 
 # ---------- закрытые адреса: зависимость стоит на всём роутере ----------
@@ -123,6 +167,31 @@ def sync(body: SyncIn | None = None, conn=Depends(get_conn)):
     return {"results": lastfm.sync_all(conn, names, key)}
 
 
+@protected.get("/signups")
+def signups(conn=Depends(get_conn)):
+    return storage.list_signups(conn, "pending")
+
+
+def _decide(signup_id: int, approve: bool, conn):
+    s = storage.get_signup(conn, signup_id)
+    if not s:
+        raise HTTPException(404, "Заявка не найдена.")
+    if s["status"] != "pending":
+        raise HTTPException(409, "Заявка уже обработана.")
+    storage.decide_signup(conn, signup_id, approve)
+    return {"id": signup_id, "status": "approved" if approve else "rejected"}
+
+
+@protected.post("/signups/{signup_id}/approve")
+def approve_signup(signup_id: int, conn=Depends(get_conn)):
+    return _decide(signup_id, True, conn)
+
+
+@protected.post("/signups/{signup_id}/reject")
+def reject_signup(signup_id: int, conn=Depends(get_conn)):
+    return _decide(signup_id, False, conn)
+
+
 @protected.get("/report")
 def report(conn=Depends(get_conn)):
     return analytics.build_report(storage.all_scrobbles(conn), generated_at=int(time.time()))
@@ -131,6 +200,7 @@ def report(conn=Depends(get_conn)):
 def create_app() -> FastAPI:
     app = FastAPI(title="Flow API")
     app.state.auth = Auth()
+    app.state.signup_limiter = RateLimiter(SIGNUP_LIMIT, SIGNUP_WINDOW)
     app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS,
                        allow_methods=["GET", "POST", "DELETE"],
                        allow_headers=["Authorization", "Content-Type"])

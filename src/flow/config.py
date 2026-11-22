@@ -20,6 +20,11 @@ def lastfm_key() -> str:
     return key
 
 
+def signup_enabled() -> bool:
+    """Публичные заявки выключены, пока явно не включены (SIGNUP_ENABLED=1)."""
+    return os.environ.get("SIGNUP_ENABLED", "").strip().lower() in ("1", "true", "yes")
+
+
 def admin_pin() -> str | None:
     """None значит, что админ-режим выключен (API отвечает 503). Значения по умолчанию нет."""
     return os.environ.get("ADMIN_PIN") or None

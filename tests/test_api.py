@@ -27,6 +27,7 @@ def env(monkeypatch, tmp_path):
     monkeypatch.setenv("DB_PATH", str(tmp_path / "api.db"))
     monkeypatch.setenv("ADMIN_PIN", PIN)
     monkeypatch.setenv("LASTFM_KEY", "test-key")
+    monkeypatch.setenv("SIGNUP_ENABLED", "1")
 
     def no_network(*a, **k):
         raise AssertionError("тест попытался сходить в сеть")
@@ -88,7 +89,7 @@ def test_every_api_route_except_health_and_auth_requires_token(client):
     """Страховка: новый адрес нельзя случайно оставить открытым."""
     checked = 0
     for path, methods in client.app.openapi()["paths"].items():
-        if not path.startswith("/api") or path in ("/api/health", "/api/auth"):
+        if not path.startswith("/api") or path in ("/api/health", "/api/auth", "/api/signup"):
             continue
         for method in methods:
             r = client.request(method.upper(), path.replace("{username}", "x"))
@@ -191,3 +192,145 @@ def test_report_contract(authed):
     assert len(u["hours"]) == 24
     assert rep["similarity"]["users"] == ["anna", "bob"]
     assert rep["matrix"]["users"] == ["anna", "bob"] and rep["matrix"]["artists"][0] == "a"
+
+
+# ---------- публичные заявки ----------
+
+OK_INFO = FakeResponse({"user": {"name": "Friend_FM"}})
+OK_RECENT = FakeResponse({"recenttracks": {"track": [], "@attr": {"totalPages": "0"}}})
+GOOD = {"username": "friend_fm", "consent": True}
+
+
+def signups_in_db():
+    return storage.connect().execute("SELECT username, contact, status, consent_at FROM signup_requests").fetchall()
+
+
+def test_signup_ok_saves_pending_with_consent_time(client, monkeypatch):
+    fake_lastfm(monkeypatch, OK_INFO, OK_RECENT)
+    r = client.post("/api/signup", json={**GOOD, "contact": " @friend "})
+    assert r.status_code == 200 and r.json() == {"status": "received"}
+    (row,) = signups_in_db()
+    assert row["username"] == "Friend_FM" and row["status"] == "pending"
+    assert row["contact"] == "@friend" and row["consent_at"] > 0
+
+
+def test_signup_unknown_user_404(client, monkeypatch):
+    fake_lastfm(monkeypatch, FakeResponse({"error": 6, "message": "User not found"}, 404))
+    r = client.post("/api/signup", json=GOOD)
+    assert r.status_code == 404 and "не найден" in r.json()["detail"]
+    assert signups_in_db() == []
+
+
+def test_signup_private_profile_403(client, monkeypatch):
+    fake_lastfm(monkeypatch, OK_INFO, FakeResponse({"error": 17, "message": "login"}, 403))
+    r = client.post("/api/signup", json=GOOD)
+    assert r.status_code == 403 and "закрыт" in r.json()["detail"]
+    assert signups_in_db() == []
+
+
+def test_signup_without_consent_400_and_no_lastfm_call(client):
+    # сеть в этом файле запрещена: любой вызов Last.fm уронил бы тест
+    for body in ({"username": "friend_fm"}, {"username": "friend_fm", "consent": False}):
+        r = client.post("/api/signup", json=body)
+        assert r.status_code == 400 and "согласие" in r.json()["detail"].lower()
+    assert signups_in_db() == []
+
+
+def test_signup_duplicate_same_answer_one_row(client, monkeypatch):
+    fake_lastfm(monkeypatch, OK_INFO, OK_RECENT, OK_INFO, OK_RECENT)
+    first = client.post("/api/signup", json=GOOD)
+    second = client.post("/api/signup", json=GOOD)
+    assert first.status_code == second.status_code == 200 and first.json() == second.json()
+    assert len(signups_in_db()) == 1
+
+
+def test_signup_existing_person_same_answer_nothing_created(client, monkeypatch):
+    storage.add_person(storage.connect(), "Friend_FM", "Friend_FM")
+    fake_lastfm(monkeypatch, OK_INFO, OK_RECENT)
+    r = client.post("/api/signup", json=GOOD)
+    assert r.status_code == 200 and r.json() == {"status": "received"}
+    assert signups_in_db() == []
+
+
+def test_signup_honeypot_silent_success(client):
+    r = client.post("/api/signup", json={**GOOD, "website": "http://spam.example"})
+    assert r.status_code == 200 and r.json() == {"status": "received"}
+    assert signups_in_db() == []
+
+
+def test_signup_length_limits(client):
+    assert client.post("/api/signup", json={**GOOD, "contact": "x" * 101}).status_code == 422
+    assert client.post("/api/signup", json={**GOOD, "username": "a" * 65}).status_code == 422
+    assert client.post("/api/signup", json={**GOOD, "contact": "x" * 5000}).status_code in (413, 422)
+
+
+def test_signup_rate_limit_429(client, monkeypatch):
+    fake_lastfm(monkeypatch, *[OK_INFO, OK_RECENT] * 5)
+    assert [client.post("/api/signup", json=GOOD).status_code for _ in range(5)] == [200] * 5
+    assert client.post("/api/signup", json=GOOD).status_code == 429
+
+
+def test_signup_disabled_404(client, monkeypatch):
+    monkeypatch.delenv("SIGNUP_ENABLED")
+    assert client.post("/api/signup", json=GOOD).status_code == 404
+
+
+def test_signup_pending_cap_503(client, monkeypatch):
+    conn = storage.connect()
+    for i in range(50):
+        storage.create_signup(conn, f"user{i}", None, 1)
+    assert client.post("/api/signup", json=GOOD).status_code == 503
+
+
+def test_public_endpoints_leak_nothing(client, monkeypatch):
+    storage.add_person(storage.connect(), "secret_person", "Secret")
+    storage.insert_scrobbles(storage.connect(), "secret_person", [("secret artist", "t", 1)])
+    fake_lastfm(monkeypatch, OK_INFO, OK_RECENT)
+    bodies = [client.get("/api/health").text, client.post("/api/signup", json=GOOD).text]
+    assert client.get("/api/health").json() == {"status": "ok"}
+    for text in bodies:
+        assert "secret" not in text.lower()
+    for path in ("/api/people", "/api/signups", "/api/report"):
+        assert client.get(path).status_code == 401
+
+
+# ---------- админка заявок ----------
+
+def make_signup(contact="@f"):
+    conn = storage.connect()
+    storage.create_signup(conn, "Friend_FM", contact, 100)
+    return conn.execute("SELECT id FROM signup_requests").fetchone()["id"]
+
+
+def test_signups_list_requires_token_and_lists_pending(client, authed):
+    make_signup()
+    r = authed.get("/api/signups")
+    assert r.status_code == 200 and r.json()[0]["username"] == "Friend_FM"
+
+
+def test_approve_moves_to_people_and_clears_contact(authed):
+    sid = make_signup()
+    assert authed.post(f"/api/signups/{sid}/approve").json() == {"id": sid, "status": "approved"}
+    assert [p["username"] for p in authed.get("/api/people").json()] == ["Friend_FM"]
+    assert authed.get("/api/signups").json() == []
+    assert signups_in_db()[0]["contact"] is None
+    assert authed.post(f"/api/signups/{sid}/approve").status_code == 409
+
+
+def test_reject_changes_status_not_people(authed):
+    sid = make_signup()
+    assert authed.post(f"/api/signups/{sid}/reject").json()["status"] == "rejected"
+    assert authed.get("/api/people").json() == []
+    row = signups_in_db()[0]
+    assert row["status"] == "rejected" and row["contact"] is None
+
+
+def test_decide_unknown_signup_404(authed):
+    assert authed.post("/api/signups/999/approve").status_code == 404
+
+
+def test_delete_person_removes_their_signups(authed):
+    sid = make_signup()
+    authed.post(f"/api/signups/{sid}/approve")
+    assert authed.delete("/api/people/Friend_FM").status_code == 204
+    assert signups_in_db() == []

@@ -16,6 +16,17 @@ CREATE TABLE IF NOT EXISTS people(
   last_synced_at INTEGER,
   status TEXT NOT NULL DEFAULT 'ok',
   error TEXT);
+CREATE TABLE IF NOT EXISTS signup_requests(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT NOT NULL,
+  contact TEXT,
+  consent_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  decided_at INTEGER);
+-- не больше одной ожидающей заявки на ник
+CREATE UNIQUE INDEX IF NOT EXISTS signup_pending_unique
+  ON signup_requests(username COLLATE NOCASE) WHERE status='pending';
 """
 
 
@@ -71,9 +82,53 @@ def set_status(conn, username: str, status: str, error: str | None = None) -> No
 def delete_person(conn, username: str) -> bool:
     """Удаляет человека и все его прослушивания в одной транзакции."""
     with conn:
+        conn.execute("DELETE FROM signup_requests WHERE username=? COLLATE NOCASE", (username,))
         conn.execute("DELETE FROM scrobbles WHERE user=?", (username,))
         cur = conn.execute("DELETE FROM people WHERE username=?", (username,))
     return cur.rowcount > 0
+
+
+# ---------- signup_requests ----------
+
+def create_signup(conn, username: str, contact: str | None, consent_at: int) -> bool:
+    """False, если на этот ник уже есть ожидающая заявка."""
+    try:
+        conn.execute(
+            "INSERT INTO signup_requests(username, contact, consent_at, created_at) VALUES (?,?,?,?)",
+            (username, contact or None, consent_at, int(time.time())))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+
+
+def count_pending_signups(conn) -> int:
+    return conn.execute("SELECT COUNT(*) FROM signup_requests WHERE status='pending'").fetchone()[0]
+
+
+def list_signups(conn, status: str = "pending") -> list[dict]:
+    rows = conn.execute(
+        "SELECT id, username, contact, consent_at, created_at, status FROM signup_requests "
+        "WHERE status=? ORDER BY id", (status,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_signup(conn, signup_id: int) -> dict | None:
+    row = conn.execute("SELECT * FROM signup_requests WHERE id=?", (signup_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def decide_signup(conn, signup_id: int, approve: bool) -> None:
+    """Одна транзакция: при принятии человек попадает в people (если его там ещё нет),
+    контакт стирается в любом случае (минимизация данных)."""
+    now = int(time.time())
+    with conn:
+        row = conn.execute("SELECT username FROM signup_requests WHERE id=?", (signup_id,)).fetchone()
+        if approve:
+            conn.execute("INSERT OR IGNORE INTO people(username, display_name, added_at) VALUES (?,?,?)",
+                         (row["username"], row["username"], now))
+        conn.execute("UPDATE signup_requests SET status=?, decided_at=?, contact=NULL WHERE id=?",
+                     ("approved" if approve else "rejected", now, signup_id))
 
 
 # ---------- scrobbles ----------
