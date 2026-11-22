@@ -8,10 +8,10 @@ PAGE_LIMIT = 200   # максимум для user.getRecentTracks по доку�
 TIMEOUT = 30       # секунд на один запрос
 
 MESSAGES = {
-    "private": "Профиль закрыт. Попросите друга разрешить показ недавних прослушиваний "
-               "в настройках приватности Last.fm.",
-    "not_found": "Пользователь с таким ником не найден на Last.fm.",
-    "error": "Не удалось связаться с Last.fm. Попробуйте позже.",
+    "private": "This profile is private. Ask your friend to allow showing recent listening "
+               "in their Last.fm privacy settings.",
+    "not_found": "Last.fm user not found.",
+    "error": "Could not reach Last.fm. Please try again later.",
 }
 
 
@@ -31,10 +31,10 @@ def _error_from_code(code: int, message: str) -> LastfmError:
     if code == 17:
         return LastfmError("private", MESSAGES["private"])
     if code == 29:
-        return LastfmError("error", "Last.fm просит подождать (лимит запросов). Повторите через минуту.")
+        return LastfmError("error", "Last.fm asks you to wait (rate limit). Try again in a minute.")
     if code == 10:
-        return LastfmError("error", "Last.fm отклонил ключ API. Проверьте LASTFM_KEY.")
-    return LastfmError("error", f"Last.fm вернул ошибку {code}: {message}")
+        return LastfmError("error", "Last.fm rejected the API key. Check LASTFM_KEY.")
+    return LastfmError("error", f"Last.fm returned error {code}: {message}")
 
 
 def _call(method: str, api_key: str, timeout: float = TIMEOUT, **params) -> dict:
@@ -49,7 +49,7 @@ def _call(method: str, api_key: str, timeout: float = TIMEOUT, **params) -> dict
         raise _error_from_code(int(data["error"]), str(data.get("message", "")))
     r.raise_for_status()
     if not isinstance(data, dict):
-        raise LastfmError("error", "Last.fm вернул ответ не в формате JSON.")
+        raise LastfmError("error", "Last.fm returned a response that is not JSON.")
     return data
 
 

@@ -140,7 +140,7 @@ def test_add_list_delete_person(authed, monkeypatch):
 def test_add_unknown_user_404(authed, monkeypatch):
     fake_lastfm(monkeypatch, FakeResponse({"error": 6, "message": "User not found"}, 404))
     r = authed.post("/api/people", json={"username": "ghost", "display_name": "X"})
-    assert r.status_code == 404 and "не найден" in r.json()["detail"]
+    assert r.status_code == 404 and "not found" in r.json()["detail"].lower()
 
 
 def test_add_duplicate_409(authed, monkeypatch):
@@ -217,14 +217,14 @@ def test_signup_ok_saves_pending_with_consent_time(client, monkeypatch):
 def test_signup_unknown_user_404(client, monkeypatch):
     fake_lastfm(monkeypatch, FakeResponse({"error": 6, "message": "User not found"}, 404))
     r = client.post("/api/signup", json=GOOD)
-    assert r.status_code == 404 and "не найден" in r.json()["detail"]
+    assert r.status_code == 404 and "not found" in r.json()["detail"].lower()
     assert signups_in_db() == []
 
 
 def test_signup_private_profile_403(client, monkeypatch):
     fake_lastfm(monkeypatch, OK_INFO, FakeResponse({"error": 17, "message": "login"}, 403))
     r = client.post("/api/signup", json=GOOD)
-    assert r.status_code == 403 and "закрыт" in r.json()["detail"]
+    assert r.status_code == 403 and "private" in r.json()["detail"].lower()
     assert signups_in_db() == []
 
 
@@ -232,7 +232,7 @@ def test_signup_without_consent_400_and_no_lastfm_call(client):
     # сеть в этом файле запрещена: любой вызов Last.fm уронил бы тест
     for body in ({"username": "friend_fm"}, {"username": "friend_fm", "consent": False}):
         r = client.post("/api/signup", json=body)
-        assert r.status_code == 400 and "согласие" in r.json()["detail"].lower()
+        assert r.status_code == 400 and "consent" in r.json()["detail"].lower()
     assert signups_in_db() == []
 
 
@@ -334,3 +334,77 @@ def test_delete_person_removes_their_signups(authed):
     authed.post(f"/api/signups/{sid}/approve")
     assert authed.delete("/api/people/Friend_FM").status_code == 204
     assert signups_in_db() == []
+
+
+# ---------- раздача собранного фронтенда ----------
+
+def test_serves_built_frontend_without_shadowing_api(tmp_path):
+    (tmp_path / "index.html").write_text("<!doctype html><title>Flow</title>")
+    c = TestClient(create_app(static_dir=tmp_path))
+    assert "<title>Flow</title>" in c.get("/").text
+    assert c.get("/api/health").json() == {"status": "ok"}       # API не перекрыт
+    assert c.get("/api/report").status_code == 401               # защита на месте
+    assert c.get("/docs").status_code == 200
+
+
+def test_no_frontend_when_dist_missing(tmp_path):
+    c = TestClient(create_app(static_dir=tmp_path / "nope"))
+    assert c.get("/").status_code == 404
+    assert c.get("/api/health").status_code == 200
+
+
+# ---------- клиентские маршруты (SPA fallback) ----------
+
+INDEX = "<!doctype html><title>Flow</title>"
+
+
+@pytest.fixture
+def spa(tmp_path):
+    (tmp_path / "index.html").write_text(INDEX)
+    (tmp_path / "assets").mkdir()
+    (tmp_path / "assets" / "app.js").write_text("console.log('app')")
+    return TestClient(create_app(static_dir=tmp_path))
+
+
+@pytest.mark.parametrize("path", ["/", "/guestform", "/guestform/", "/guestform?invite=abc123", "/some/client/route"])
+def test_client_routes_serve_index(spa, path):
+    """Прямая ссылка и обновление страницы на /guestform не должны давать 404."""
+    r = spa.get(path)
+    assert r.status_code == 200
+    assert "<title>Flow</title>" in r.text
+    assert r.headers["content-type"].startswith("text/html")
+
+
+def test_existing_static_file_is_served_as_is(spa):
+    r = spa.get("/assets/app.js")
+    assert r.status_code == 200 and "console.log('app')" in r.text
+
+
+def test_missing_asset_is_404_not_index(spa):
+    """Пропавший скрипт должен быть 404, а не HTML вместо JavaScript."""
+    r = spa.get("/assets/missing.js")
+    assert r.status_code == 404 and "<title>" not in r.text
+
+
+@pytest.mark.parametrize("path", ["/api/nope", "/api/people/x/y", "/api"])
+def test_unknown_api_paths_are_404_not_index(spa, path):
+    """API не перехватывается фолбэком: клиентам API нужен честный 404."""
+    r = spa.get(path)
+    assert r.status_code in (404, 401) and "<title>" not in r.text
+
+
+def test_api_and_docs_not_shadowed_by_fallback(spa):
+    assert spa.get("/api/health").json() == {"status": "ok"}
+    assert spa.get("/api/report").status_code == 401          # закрыто токеном, а не HTML
+    assert spa.get("/docs").status_code == 200 and "swagger" in spa.get("/docs").text.lower()
+
+
+def test_guestform_is_404_without_a_build(tmp_path):
+    c = TestClient(create_app(static_dir=tmp_path / "nope"))
+    assert c.get("/guestform").status_code == 404
+    assert c.get("/api/health").status_code == 200
+
+
+def test_invite_param_is_ignored_by_server_routing(spa):
+    """Код приглашения читает фронтенд; сервер просто отдаёт страницу, ничего о коде не зная."""
+    assert spa.get("/guestform?invite=wrong").text == spa.get("/guestform").text
